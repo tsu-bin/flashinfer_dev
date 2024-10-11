@@ -1,34 +1,41 @@
 # Whether to compile fp8 kernels or not.
 set(FLASHINFER_ENABLE_FP8 ON)
 # Whether to compile bf16 kernels or not.
-set(FLASHINFER_ENABLE_BF16 ON)
+set(FLASHINFER_ENABLE_BF16 OFF)
 # Whether to compile tvm bindings or not.
-set(FLASHINFER_TVM_BINDING ON)
+set(FLASHINFER_TVM_BINDING OFF)
 # Whether to compile prefill kernel tests/benchmarks or not.
-set(FLASHINFER_PREFILL ON)
+set(FLASHINFER_PREFILL OFF)
 # Whether to compile decode kernel tests/benchmarks or not.
 set(FLASHINFER_DECODE ON)
 # Whether to compile page kernel tests/benchmarks or not.
-set(FLASHINFER_PAGE ON)
+set(FLASHINFER_PAGE OFF)
 # Whether to compile cascade kernel tests/benchmarks or not.
-set(FLASHINFER_CASCADE ON)
+set(FLASHINFER_CASCADE OFF)
 # Whether to compile sampling kernel tests/benchmarks or not.
-set(FLASHINFER_SAMPLING ON)
+set(FLASHINFER_SAMPLING OFF)
 # Whether to compile normalization kernel tests/benchmarks or not.
-set(FLASHINFER_NORMALIZATION ON)
+set(FLASHINFER_NORMALIZATION OFF)
 # Whether to compile fastdiv tests
-set(FLASHINFER_FASTDIV_TEST ON)
+set(FLASHINFER_FASTDIV_TEST OFF)
 # Whether to compile fastdequant tests
-set(FLASHINFER_FASTDEQUANT_TEST ON)
+set(FLASHINFER_FASTDEQUANT_TEST OFF)
 # Whether to compile distributed tests
-set(FLASHINFER_DISTRIBUTED ON)
+set(FLASHINFER_DISTRIBUTED OFF)
 # The following configurations can impact the binary
 # size of the generated library
-set(FLASHINFER_GEN_HEAD_DIMS 64 128 256)
-set(FLASHINFER_GEN_KV_LAYOUTS 0 1)
-set(FLASHINFER_GEN_POS_ENCODING_MODES 0 1 2)
-set(FLASHINFER_GEN_ALLOW_FP16_QK_REDUCTIONS "false" "true")
-set(FLASHINFER_GEN_MASK_MODES 0 1 2)
+set(FLASHINFER_GEN_HEAD_DIMS 256 512) # 64 128 256
+set(FLASHINFER_GEN_KV_LAYOUTS 0) # 0 1
+set(FLASHINFER_GEN_POS_ENCODING_MODES 1) # 0 1 2
+set(FLASHINFER_GEN_ALLOW_FP16_QK_REDUCTIONS "false") # "false" "true"
+set(FLASHINFER_GEN_MASK_MODES 1) # 0 1 2
+
+set(FLASHINFER_TVM_SOURCE_DIR "/hostShare/tools/tvm_all/tvm-dev/")
+
+set(CMAKE_BUILD_TYPE Debug)
+
+set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -O0 -g -G -keep")
+
 
 # Set target cuda architectures for tests/benchmarks, defaults to native.
 # "native" is a special value for CMAKE_CUDA_ARCHITECTURES which means use the architectures of the host's GPU.
