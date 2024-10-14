@@ -130,7 +130,8 @@ template <uint32_t GROUP_SIZE, uint32_t HEAD_DIM, PosEncodingMode POS_ENCODING_M
           typename AttentionVariant>
 cudaError_t BatchDecodeWithPagedKVCacheWorkEstimationDispatched(
     bool& split_kv, uint32_t& max_grid_size, uint32_t& max_num_pages_per_batch,
-    uint32_t& new_batch_size, uint32_t batch_size, typename AttentionVariant::IdType* kv_indptr_h,
+    uint32_t& new_batch_size, uint32_t& gdy,
+    uint32_t batch_size, typename AttentionVariant::IdType* kv_indptr_h,
     const uint32_t num_qo_heads, const uint32_t page_size, bool enable_cuda_graph,
     cudaStream_t stream) {
   using DTypeKV = typename AttentionVariant::DTypeKV;
@@ -145,6 +146,7 @@ cudaError_t BatchDecodeWithPagedKVCacheWorkEstimationDispatched(
     constexpr uint32_t bdz = num_threads / (bdx * bdy);
     constexpr uint32_t tile_size_per_bdx = GROUP_SIZE == 1 ? (sizeof(DTypeKV) == 1 ? 2U : 4U) : 1U;
     const uint32_t num_kv_heads = num_qo_heads / GROUP_SIZE;
+    gdy = num_kv_heads;
     const uint32_t smem_size =
         2 * NUM_STAGES_SMEM * tile_size_per_bdx * bdy * bdz * HEAD_DIM * sizeof(DTypeKV) +
         std::max(tile_size_per_bdx * num_threads * sizeof(DTypeKV*), 2 * bdy * bdz * sizeof(float));
@@ -160,7 +162,7 @@ cudaError_t BatchDecodeWithPagedKVCacheWorkEstimationDispatched(
     FLASHINFER_CUDA_CALL(cudaOccupancyMaxActiveBlocksPerMultiprocessor(&num_blocks_per_sm, kernel,
                                                                        num_threads, smem_size));
     max_grid_size = num_blocks_per_sm * num_sm;
-    if (batch_size * num_kv_heads >= max_grid_size) {
+    if (batch_size * gdy >= max_grid_size) {
       split_kv = false;
       max_num_pages_per_batch = 1;
       for (uint32_t batch_idx = 0; batch_idx < batch_size; ++batch_idx) {
@@ -176,7 +178,7 @@ cudaError_t BatchDecodeWithPagedKVCacheWorkEstimationDispatched(
       }
       std::tie(max_num_pages_per_batch, new_batch_size) =
           PartitionPagedKVCacheBinarySearchMinNumPagePerBatch(
-              max_grid_size, num_kv_heads, num_pages, std::max(128 / page_size, 1U));
+              max_grid_size, gdy, num_pages, std::max(128 / page_size, 1U));
       if (new_batch_size == batch_size && !enable_cuda_graph) {
         // do not use partition-kv kernel for short sequence, when not using CUDAGraph
         split_kv = false;
@@ -286,21 +288,22 @@ template <uint32_t HEAD_DIM, PosEncodingMode POS_ENCODING_MODE, typename Attenti
 cudaError_t DecodePlan(void* float_buffer, size_t float_workspace_size_in_bytes, void* int_buffer,
                        void* page_locked_int_buffer, size_t int_workspace_size_in_bytes,
                        DecodePlanInfo& plan_info, typename AttentionVariant::IdType* indptr_h,
-                       uint32_t batch_size, uint32_t num_qo_heads, uint32_t num_kv_heads,
+                       uint32_t batch_size, uint32_t num_qo_heads,
                        uint32_t page_size, bool enable_cuda_graph, cudaStream_t stream,
                        WorkEstimationFunc work_estimation_func) {
   using DTypeO = typename AttentionVariant::DTypeO;
   using IdType = typename AttentionVariant::IdType;
   bool split_kv;
-  uint32_t max_grid_size, kv_chunk_size_in_pages, new_batch_size;
+  uint32_t max_grid_size, kv_chunk_size_in_pages, new_batch_size, gdy;
 
   FLASHINFER_CUDA_CALL(work_estimation_func(split_kv, max_grid_size, kv_chunk_size_in_pages,
-                                            new_batch_size, batch_size, indptr_h, num_qo_heads,
+                                            new_batch_size, gdy, 
+                                            batch_size, indptr_h, num_qo_heads,
                                             page_size, enable_cuda_graph, stream));
   size_t padded_batch_size;
   plan_info.enable_cuda_graph = enable_cuda_graph;
   plan_info.split_kv = split_kv;
-  padded_batch_size = (enable_cuda_graph) ? (split_kv ? max_grid_size / num_kv_heads : batch_size)
+  padded_batch_size = (enable_cuda_graph) ? (split_kv ? max_grid_size / gdy : batch_size)
                                           : new_batch_size;
   plan_info.padded_batch_size = padded_batch_size;
 

@@ -39,7 +39,7 @@ class BatchDecodeHandler {
   cudaError_t PlanDispatched(void* float_buffer, size_t float_workspace_size_in_bytes,
                              void* int_buffer, size_t int_workspace_size_in_bytes, IdType* indptr_h,
                              IdType* last_page_len_h, uint32_t batch_size, uint32_t num_qo_heads,
-                             uint32_t num_kv_heads, uint32_t page_size) {
+                             uint32_t page_size) {
     int_buffer_ = int_buffer;
     float_buffer_ = float_buffer;
     using ParamsT = BatchDecodeParams<DTypeQ, DTypeKV, DTypeO, IdType>;
@@ -53,7 +53,7 @@ class BatchDecodeHandler {
                                                             AttentionVariant>;
     return DecodePlan<HEAD_DIM, POS_ENCODING_MODE, AttentionVariant>(
         float_buffer, float_workspace_size_in_bytes, int_buffer, page_locked_buffer_,
-        int_workspace_size_in_bytes, plan_info_, indptr_h, batch_size, num_qo_heads, num_kv_heads,
+        int_workspace_size_in_bytes, plan_info_, indptr_h, batch_size, num_qo_heads,
         page_size, cuda_graph_enabled_, stream_, work_estimation_func);
   }
 
@@ -562,7 +562,7 @@ cudaError_t BatchDecodeHandlerPlan(BatchDecodeHandler* handler, void* float_buff
       DISPATCH_GQA_GROUP_SIZE(num_qo_heads / num_kv_heads, GROUP_SIZE, {
         return handler->PlanDispatched<GROUP_SIZE, HEAD_DIM, POS_ENCODING_MODE, DTypeQ, DTypeKV, DTypeO, IdType>(
             float_buffer, float_workspace_size_in_bytes, int_buffer, int_workspace_size_in_bytes,
-            indptr_h, last_page_len_h, batch_size, num_qo_heads, num_kv_heads, page_size);
+            indptr_h, last_page_len_h, batch_size, num_qo_heads, page_size);
       });
     });
   });
