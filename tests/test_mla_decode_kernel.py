@@ -138,16 +138,16 @@ class DeepseekV2AttentionVanilla(nn.Module):
         if value_states.size() != (bsz, self.num_heads, kv_len, self.v_head_dim):
             raise ValueError(f"value_states[{value_states.size()}]")
 
-        freqs_cis = precompute_freqs_cis(
-            self.qk_rope_head_dim, kv_len, self.rope_theta, use_scaled=False
-        ).to(q_pe.device)
-        q_pe, k_pe = apply_rotary_emb(
-            q_pe.transpose(1, 2).repeat(1, kv_len, 1, 1),
-            k_pe.transpose(1, 2),
-            freqs_cis,
-        )
-        q_pe = q_pe[:, -1:, :, :].transpose(1, 2)
-        k_pe = k_pe.transpose(1, 2)
+        # freqs_cis = precompute_freqs_cis(
+        #     self.qk_rope_head_dim, kv_len, self.rope_theta, use_scaled=False
+        # ).to(q_pe.device)
+        # q_pe, k_pe = apply_rotary_emb(
+        #     q_pe.transpose(1, 2).repeat(1, kv_len, 1, 1),
+        #     k_pe.transpose(1, 2),
+        #     freqs_cis,
+        # )
+        # q_pe = q_pe[:, -1:, :, :].transpose(1, 2)
+        # k_pe = k_pe.transpose(1, 2)
 
         # Concat q_nope and q_pe to produce a new Q tensor with head_dim = 192
         query_states = q.new_empty(bsz, self.num_heads, q_len, self.q_head_dim)
@@ -274,16 +274,16 @@ class DeepseekV2AttentionMatAbsorbDecode(nn.Module):
             k_pe_cache = k_pe_cache.to(q_kv_dtype)
 
         if not use_flashinfer_kernel:
-            freqs_cis = precompute_freqs_cis(
-                self.qk_rope_head_dim, kv_len, self.rope_theta, use_scaled=False
-            ).to(k_pe_cache.device)
-            q_pe, k_pe_cache = apply_rotary_emb(
-                q_pe.unsqueeze(1).repeat(1, kv_len, 1, 1),
-                k_pe_cache.unsqueeze(2),
-                freqs_cis,
-            )
-            q_pe = q_pe[:, -1:, :, :].squeeze(1)
-            k_pe_cache = k_pe_cache.squeeze(2)
+            # freqs_cis = precompute_freqs_cis(
+            #     self.qk_rope_head_dim, kv_len, self.rope_theta, use_scaled=False
+            # ).to(k_pe_cache.device)
+            # q_pe, k_pe_cache = apply_rotary_emb(
+            #     q_pe.unsqueeze(1).repeat(1, kv_len, 1, 1),
+            #     k_pe_cache.unsqueeze(2),
+            #     freqs_cis,
+            # )
+            # q_pe = q_pe[:, -1:, :, :].squeeze(1)
+            # k_pe_cache = k_pe_cache.squeeze(2)
 
             # attn_weights_pe ~ [bsz, 128, kv_len]
             attn_weights_pe = torch.matmul(

@@ -781,7 +781,7 @@ template <uint32_t vec_size_ckv, uint32_t vec_size_kpe, uint32_t bdx, uint32_t t
 __device__ __forceinline__ void compute_qk_and_update_local_stat_mla(
     const Params& params, AttentionVariant variant, const uint32_t batch_idx, const T* ckv_smem,
     const vec_t<float, vec_size_ckv>& q_nope_vec, const T* kpe_smem,
-    const vec_t<float, vec_size_kpe>& q_pe_vec, const vec_t<float, vec_size_kpe>& freq,
+    const vec_t<float, vec_size_kpe>& q_pe_vec, // const vec_t<float, vec_size_kpe>& freq,
     uint32_t kv_idx_base, uint32_t iter_base, uint32_t iter_bound, state_t<vec_size_ckv>& st) {
   uint32_t tx = threadIdx.x, tz = threadIdx.z;
   constexpr uint32_t head_dim_ckv = bdx * vec_size_ckv;
@@ -794,8 +794,9 @@ __device__ __forceinline__ void compute_qk_and_update_local_stat_mla(
     ckv_vec.cast_load(ckv_smem + j * head_dim_ckv + tx * vec_size_ckv);
 
     vec_t<float, vec_size_kpe> kpe_vec;
-    kpe_vec = vec_apply_llama_rope_interleave<vec_size_kpe, bdx>(kpe_smem + j * head_dim_kpe, freq,
-                                                                 kv_idx_base + tz * tile_size + j);
+    // kpe_vec = vec_apply_llama_rope_interleave<vec_size_kpe, bdx>(kpe_smem + j * head_dim_kpe, freq,
+    //                                                              kv_idx_base + tz * tile_size + j);
+    kpe_vec.cast_load(kpe_smem + j * head_dim_kpe + tx * vec_size_kpe);
     s[j] = 0.f;
 #pragma unroll
     for (uint32_t i = 0; i < vec_size_ckv; ++i) {
@@ -857,6 +858,7 @@ __global__ void BatchDecodeWithPagedKVCacheKernelMLA(Params params) {
   const float rope_rcp_scale = params.rope_rcp_scale;
   const float rope_rcp_theta = params.rope_rcp_theta;
   const bool partition_kv = params.partition_kv;
+  params.sm_scale *= math::log2e;
 
   constexpr uint32_t head_dim_ckv = bdx * vec_size_ckv;
   constexpr uint32_t head_dim_kpe = bdx * vec_size_kpe;
@@ -905,12 +907,12 @@ __global__ void BatchDecodeWithPagedKVCacheKernelMLA(Params params) {
   state_t<vec_size_ckv> st[tile_size_qo_heads];
   uint32_t qo_head_idx[tile_size_qo_heads];
 
-  vec_t<float, vec_size_kpe> freq;
-#pragma unroll
-  for (uint32_t i = 0; i < vec_size_kpe; ++i) {
-    freq[i] = rope_rcp_scale * __powf(rope_rcp_theta, float(2 * ((tx * vec_size_kpe + i) / 2)) /
-                                                          float(head_dim_kpe));
-  }
+//   vec_t<float, vec_size_kpe> freq;
+// #pragma unroll
+//   for (uint32_t i = 0; i < vec_size_kpe; ++i) {
+//     freq[i] = rope_rcp_scale * __powf(rope_rcp_theta, float(2 * ((tx * vec_size_kpe + i) / 2)) /
+//                                                           float(head_dim_kpe));
+//   }
   // load q_nope and q_pe tile
 #pragma unroll
   for (int i = 0; i < tile_size_qo_heads; ++i) {
@@ -919,9 +921,12 @@ __global__ void BatchDecodeWithPagedKVCacheKernelMLA(Params params) {
       q_nope_vec[i].cast_load(q_nope +
                               (mapped_batch_idx * num_qo_heads + qo_head_idx[i]) * head_dim_ckv +
                               tx * vec_size_ckv);
-      q_pe_vec[i] = vec_apply_llama_rope_interleave<vec_size_kpe, bdx>(
-          q_pe + (mapped_batch_idx * num_qo_heads + qo_head_idx[i]) * head_dim_kpe, freq,
-          q_rope_offset_val);
+      // q_pe_vec[i] = vec_apply_llama_rope_interleave<vec_size_kpe, bdx>(
+      //     q_pe + (mapped_batch_idx * num_qo_heads + qo_head_idx[i]) * head_dim_kpe, freq,
+      //     q_rope_offset_val);
+      q_pe_vec[i].cast_load(q_pe +
+                              (mapped_batch_idx * num_qo_heads + qo_head_idx[i]) * head_dim_kpe +
+                              tx * vec_size_kpe);
     }
   }
 
@@ -972,7 +977,8 @@ __global__ void BatchDecodeWithPagedKVCacheKernelMLA(Params params) {
           params, variant, mapped_batch_idx,
           ckv_smem + (stage_idx * kv_iter_len + tz * compute_qk_tile) * head_dim_ckv, q_nope_vec[i],
           kpe_smem + (stage_idx * kv_iter_len + tz * compute_qk_tile) * head_dim_kpe, q_pe_vec[i],
-          freq, kv_idx_base,
+          // freq, 
+          kv_idx_base,
           /*iter_base*/ iter * kv_iter_len, /*iter_bound*/ cur_chunk_len, st[i]);
     }
 
